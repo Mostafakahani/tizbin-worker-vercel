@@ -1,11 +1,11 @@
 /**
  * Auto-generated worker bundle for "worker-vercel".
  * Source: backend/src/external-monitoring/worker/index.ts
- * Build time: 2025-11-09T13:49:19.353Z
+ * Build time: 2025-11-09T13:55:30.733Z
  */
 'use strict';
 
-const http = require('node:http');
+const express = require('express');
 const { setInterval, clearInterval } = require('node:timers');
 
 const WORKER_ID = "worker-vercel";
@@ -136,25 +136,6 @@ function buildStats() {
   };
 }
 
-async function readRequestBody(req) {
-  const chunks = [];
-  for await (const chunk of req) {
-    chunks.push(chunk);
-  }
-  if (chunks.length === 0) {
-    return null;
-  }
-  const raw = Buffer.concat(chunks).toString('utf8');
-  if (!raw) {
-    return null;
-  }
-  try {
-    return JSON.parse(raw);
-  } catch {
-    return raw;
-  }
-}
-
 async function handleJobs(body) {
   const jobs = Array.isArray(body?.jobs) ? body.jobs : [];
   if (jobs.length > 0) {
@@ -178,70 +159,96 @@ function resolveEndpoint(req) {
   return `${scheme}://${host}`;
 }
 
-function sendJson(res, statusCode, payload) {
-  const body = JSON.stringify(payload);
-  res.statusCode = statusCode;
-  res.setHeader('Content-Type', 'application/json');
-  res.setHeader('Content-Length', Buffer.byteLength(body));
-  res.end(body);
+function withEndpoint(handler) {
+  return async (req, res) => {
+    const endpoint = resolveEndpoint(req) || DEFAULT_ENDPOINT;
+    await ensureRegistration(endpoint);
+    await sendHeartbeat(endpoint);
+    return handler(req, res, endpoint);
+  };
 }
 
-async function handler(req, res) {
-  const url = new URL(req.url || '/', 'http://localhost');
-  const endpoint = resolveEndpoint(req) || DEFAULT_ENDPOINT;
-
-  await ensureRegistration(endpoint);
-  await sendHeartbeat(endpoint);
-
-  if (req.method === 'POST' && url.pathname.endsWith('/jobs')) {
-    const body = await readRequestBody(req);
-    const result = await handleJobs(body);
-    sendJson(res, 202, result);
-    return;
-  }
-
-  if (req.method === 'GET' && url.pathname.endsWith('/status')) {
-    sendJson(res, 200, {
-      worker: {
-        id: WORKER_ID,
-        name: WORKER_NAME,
-        geo: WORKER_GEO,
-        backendUrl: BACKEND_URL,
-      },
-      stats: buildStats(),
-    });
-    return;
-  }
-
-  if (req.method === 'GET' && url.pathname.endsWith('/healthz')) {
-    sendJson(res, 200, { ok: true, workerId: WORKER_ID });
-    return;
-  }
-
-  sendJson(res, 200, {
-    ok: true,
-    workerId: WORKER_ID,
-    message: 'External monitoring worker placeholder.',
-  });
-}
-
-function createNodeServer() {
-  const server = http.createServer((req, res) => {
+function respond(handler) {
+  return (req, res) => {
     handler(req, res).catch((error) => {
       console.error('[worker:%s] Request failed:', WORKER_ID, error);
-      sendJson(res, 500, {
-        error: error instanceof Error ? error.message : String(error),
-      });
+      res
+        .status(500)
+        .json({ error: error instanceof Error ? error.message : String(error) });
     });
-  });
+  };
+}
 
-  server.listen(SERVER_PORT, '0.0.0.0', () => {
-    const endpoint = DEFAULT_ENDPOINT || `http://localhost:${SERVER_PORT}`;
+function createApp() {
+  const app = express();
+  app.use(express.json({ limit: '256kb' }));
+  app.use(express.urlencoded({ extended: false }));
+
+  app.post(
+    '/jobs',
+    respond(
+      withEndpoint(async (req, res) => {
+        const result = await handleJobs(req.body);
+        res.status(202).json(result);
+      }),
+    ),
+  );
+
+  app.get(
+    '/status',
+    respond(
+      withEndpoint(async (_req, res) => {
+        res.status(200).json({
+          worker: {
+            id: WORKER_ID,
+            name: WORKER_NAME,
+            geo: WORKER_GEO,
+            backendUrl: BACKEND_URL,
+          },
+          stats: buildStats(),
+        });
+      }),
+    ),
+  );
+
+  app.get(
+    '/healthz',
+    respond(
+      withEndpoint(async (_req, res) => {
+        res.status(200).json({ ok: true, workerId: WORKER_ID });
+      }),
+    ),
+  );
+
+  app.get(
+    '/',
+    respond(async (_req, res) => {
+      res.status(200).json({
+        ok: true,
+        workerId: WORKER_ID,
+        routes: ['/jobs', '/status', '/healthz'],
+      });
+    }),
+  );
+
+  return app;
+}
+
+const app = createApp();
+
+module.exports = app;
+module.exports.default = app;
+
+if (require.main === module) {
+  const endpoint = DEFAULT_ENDPOINT || `http://localhost:${SERVER_PORT}`;
+  app.listen(SERVER_PORT, '0.0.0.0', () => {
     console.log('[worker:%s] Listening on %s', WORKER_ID, endpoint);
     ensureRegistration(endpoint)
       .then(() => sendHeartbeat(endpoint))
       .then(() => startHeartbeatLoop(endpoint))
-      .catch((error) => console.error('[worker:%s] Startup failed:', WORKER_ID, error));
+      .catch((error) =>
+        console.error('[worker:%s] Startup failed:', WORKER_ID, error),
+      );
   });
 
   process.on('SIGTERM', () => {
@@ -249,17 +256,12 @@ function createNodeServer() {
     if (heartbeatTimer) {
       clearInterval(heartbeatTimer);
     }
-    server.close(() => process.exit(0));
+    process.exit(0);
   });
-}
-
-module.exports = handler;
-module.exports.default = handler;
-
-if (require.main === module) {
-  createNodeServer();
 } else if (DEFAULT_ENDPOINT) {
   ensureRegistration(DEFAULT_ENDPOINT)
     .then(() => sendHeartbeat(DEFAULT_ENDPOINT))
-    .catch((error) => console.error('[worker:%s] Initial registration failed:', WORKER_ID, error));
+    .catch((error) =>
+      console.error('[worker:%s] Initial registration failed:', WORKER_ID, error),
+    );
 }
