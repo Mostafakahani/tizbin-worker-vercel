@@ -1,0 +1,4 @@
+name = "worker-cloudflare"
+main = "index.js"
+compatibility_date = "2025-11-09"
+node_compat = true
