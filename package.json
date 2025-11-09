@@ -1,10 +1,11 @@
 {
-  "name": "external-monitoring-worker-vercel",
+  "name": "external-monitoring-worker-cloudflare",
   "version": "0.1.0",
-  "private": true,
-  "description": "Standalone worker bundle generated for worker-vercel",
-  "type": "commonjs",
+  "description": "Standalone worker bundle generated for worker-cloudflare",
   "main": "index.js",
+  "license": "ISC",
+  "keywords": [],
+  "author": "",
   "scripts": {
     "start": "node index.js"
   },
@@ -12,6 +13,6 @@
     "node": ">=20"
   },
   "dependencies": {
-    "express": "^4.19.2"
+    "express": "^4.18.2"
   }
 }

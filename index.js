@@ -1,16 +1,16 @@
 /**
- * Auto-generated worker bundle for "worker-vercel".
+ * Auto-generated worker bundle for "worker-cloudflare".
  * Source: backend/src/external-monitoring/worker/index.ts
- * Build time: 2025-11-09T13:55:30.733Z
+ * Build time: 2025-11-09T14:23:39.517Z
  */
 'use strict';
 
 const express = require('express');
 const { setInterval, clearInterval } = require('node:timers');
 
-const WORKER_ID = "worker-vercel";
-const WORKER_NAME = process.env.WORKER_NAME || "Worker Vercel";
-const WORKER_GEO = process.env.WORKER_GEO || "IR";
+const WORKER_ID = "worker-cloudflare";
+const WORKER_NAME = process.env.WORKER_NAME || "Worker Cloudflare";
+const WORKER_GEO = process.env.WORKER_GEO || "AWS";
 const BACKEND_URL = "https://tizbin-worker-1.loca.lt/external-monitoring";
 const CAPABILITIES = ['http-monitoring'];
 const HEARTBEAT_INTERVAL = Number(process.env.HEARTBEAT_INTERVAL || 20000);
