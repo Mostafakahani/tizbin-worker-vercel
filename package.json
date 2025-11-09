@@ -1,0 +1,14 @@
+{
+  "name": "external-monitoring-worker-vercel",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Standalone worker bundle generated for worker-vercel",
+  "type": "commonjs",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
